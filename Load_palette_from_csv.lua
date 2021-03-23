@@ -1,21 +1,6 @@
 local spr = app.activeSprite
 if not spr then return end
 
-local function save_palette_csv(filename)
-    local ncolors = #spr.palettes[1]
-    local f = io.open(filename, "w")
-    f:write(string.format('red,green,blue,alpha\n'))
-    for i = 0, ncolors-1 do
-       local c = spr.palettes[1]:getColor(i)
-       local r = c.red
-       local g = c.green
-       local b = c.blue
-       local a = c.alpha
-       f:write(string.format('%d,%d,%d,%d\n',r,g,b,a))
-    end
-    f:close()
-end
-
 local function load_palette_csv(filename)
     local f = io.open(filename, "r")
     local colors = {}
