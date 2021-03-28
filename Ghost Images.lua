@@ -51,31 +51,41 @@ do
         return names
     end
 
-    local function scaleAlpha(img, scale)
-        for it in img:pixels() do
-            local col = it()
+    local function scaleAlpha(img, bounds, scale)
+        maxX = bounds.x + bounds.width - 1
+        maxY = bounds.y + bounds.height - 1
 
-            local r = app.pixelColor.rgbaR(col)
-            local g = app.pixelColor.rgbaG(col)
-            local b = app.pixelColor.rgbaB(col)
-            local a = app.pixelColor.rgbaA(col)
+        for y=bounds.y, maxY do
+            for x=bounds.x, maxX do
+                local col = img:getPixel(x, y)
 
-            it( app.pixelColor.rgba(r, g, b, a*scale) )
+                local r = app.pixelColor.rgbaR(col)
+                local g = app.pixelColor.rgbaG(col)
+                local b = app.pixelColor.rgbaB(col)
+                local a = app.pixelColor.rgbaA(col) * scale
+
+                img:drawPixel(x, y, Color{ r=r, g=g, b=b, a=a })
+            end
         end
     end
 
-    local function tintAndScaleAlpha(img, scale, tintColor)
+    local function tintAndScaleAlpha(img, bounds, scale, tintColor)
         local r = tintColor.red
         local g = tintColor.green
         local b = tintColor.blue
         local tintScale = scale * (tintColor.alpha / 255)
 
-        for it in img:pixels() do
-            local col = it()
+        maxX = bounds.x + bounds.width - 1
+        maxY = bounds.y + bounds.height - 1
 
-            local a = app.pixelColor.rgbaA(col)
+        for y=bounds.y, maxY do
+            for x=bounds.x, maxX do
+                local col = img:getPixel(x, y)
 
-            it( app.pixelColor.rgba(r, g, b, a*tintScale) )
+                local a = app.pixelColor.rgbaA(col) * tintScale
+
+                img:drawPixel(x, y, Color{ r=r, g=g, b=b, a=a })
+            end
         end
     end
 
@@ -120,9 +130,9 @@ do
                                 if layerCel then
                                     img:drawImage(layerCel.image, layerCel.position)
                                     if userSettings.doTint then
-                                        tintAndScaleAlpha(img, 1 - i / (userSettings.nGhosts+1), userSettings.tintColor)
+                                        tintAndScaleAlpha(img, layerCel.bounds, 1 - i / (userSettings.nGhosts+1), userSettings.tintColor)
                                     else
-                                        scaleAlpha(img, 1 - i / (userSettings.nGhosts+1))
+                                        scaleAlpha(img, layerCel.bounds, 1 - i / (userSettings.nGhosts+1))
                                     end                                  
                                 end
                                 spr:newCel(upperLayer, frame, img, Point(0, 0))
