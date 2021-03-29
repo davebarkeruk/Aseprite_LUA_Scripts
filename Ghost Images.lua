@@ -107,6 +107,9 @@ do
                     upperLayer.name = "temp" .. i
                     upperLayer.opacity = 255
 
+                    local offsetX = i * userSettings.shiftX
+                    local offsetY = i * userSettings.shiftY
+
                     for frmNumber,frame in ipairs(spr.frames) do
                         local offsetFrameNumber = frmNumber - (i * userSettings.delay) % #spr.frames
 
@@ -128,11 +131,13 @@ do
                                 local ghostFrame = spr.frames[offsetFrameNumber]
                                 local layerCel = sourceLayer:cel(ghostFrame)
                                 if layerCel then
-                                    img:drawImage(layerCel.image, layerCel.position)
+                                    local pos = Point(layerCel.position.x + offsetX, layerCel.position.y + offsetY)
+                                    local bounds = Rectangle(pos.x, pos.y, layerCel.bounds.width, layerCel.bounds.height)
+                                    img:drawImage(layerCel.image, pos)
                                     if userSettings.doTint then
-                                        tintAndScaleAlpha(img, layerCel.bounds, 1 - i / (userSettings.nGhosts+1), userSettings.tintColor)
+                                        tintAndScaleAlpha(img, bounds, 1 - i / (userSettings.nGhosts+1), userSettings.tintColor)
                                     else
-                                        scaleAlpha(img, layerCel.bounds, 1 - i / (userSettings.nGhosts+1))
+                                        scaleAlpha(img, bounds, 1 - i / (userSettings.nGhosts+1))
                                     end                                  
                                 end
                                 spr:newCel(upperLayer, frame, img, Point(0, 0))
@@ -157,6 +162,8 @@ do
     dlg:check{ id="loop", label="Looping Animation", selected=true, onclick=function() return end}
     dlg:check{ id="doTint", label="Use Solid Color for Ghosts", selected=false, onclick=function() return end}
     dlg:color{ id="tintColor", label="Solid Color", color=Color{ r=0, g=0, b=0, a=255 }}
+    dlg:number{ id="shiftX", label="Shift Ghost in X axis", text="0", decimals=0}
+    dlg:number{ id="shiftY", label="Shift Ghost in Y axis", text="0", decimals=0}
     dlg:button{ id="start", text="Start", onclick=function() renderGhosts(dlg.data, clt) end }
     dlg:button{ id="exit", text="Exit" }
     dlg:show{wait=false}
