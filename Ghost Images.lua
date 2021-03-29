@@ -131,7 +131,7 @@ do
                                 local ghostFrame = spr.frames[offsetFrameNumber]
                                 local layerCel = sourceLayer:cel(ghostFrame)
                                 if layerCel then
-                                    local pos = Point(layerCel.position.x + offsetX, layerCel.position.y + offsetY)
+                                    local pos = Point(layerCel.position.x + offsetX, layerCel.position.y - offsetY)
                                     local bounds = Rectangle(pos.x, pos.y, layerCel.bounds.width, layerCel.bounds.height)
                                     img:drawImage(layerCel.image, pos)
                                     if userSettings.doTint then
@@ -158,7 +158,7 @@ do
     local dlg = Dialog("Create a Layer of Ghost Images")
     dlg:combobox{ id="layerSelect", label="Input Layer", option=clt[1].name, options=listNamesInCustomLayerTable(clt)}
     dlg:slider{ id="nGhosts", label="Number of Ghosts", min=1, max=20, value=5 }
-    dlg:slider{ id="delay", label="Delay between Ghosts", min=1, max=math.max(1, #spr.frames-1), value=math.min(5, #spr.frames-1) }
+    dlg:slider{ id="delay", label="Delay between Ghosts", min=1, max=math.max(1, #spr.frames-1), value=1 }
     dlg:check{ id="loop", label="Looping Animation", selected=true, onclick=function() return end}
     dlg:check{ id="doTint", label="Use Solid Color for Ghosts", selected=false, onclick=function() return end}
     dlg:color{ id="tintColor", label="Solid Color", color=Color{ r=0, g=0, b=0, a=255 }}
