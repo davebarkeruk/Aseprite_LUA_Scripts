@@ -127,7 +127,6 @@ do
                         bounds = bounds:union(toLayerCel.bounds)
                         if bounds:intersects(spr.bounds) then
                             bounds = bounds:intersect(spr.bounds)
-                            print(bounds.x, bounds.y, bounds.width, bounds.height)
 
                             if userSettings.transitionType == "Left to Right" then
                                 local edge = math.floor(0.1 + (fromImg.width - 2) * progress)
