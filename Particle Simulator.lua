@@ -192,6 +192,71 @@ local function renderEmitterPixels(emissionPixels)
     app.refresh()
 end
 
+local function plotLineLow(x0, y0, x1, y1, img)
+    local dx = x1 - x0
+    local dy = y1 - y0
+    local yi = 1
+    if dy < 0 then
+        yi = -1
+        dy = -dy
+    end
+    local D = (2 * dy) - dx
+    local y = y0
+
+    for x = x0, x1 do
+        img:drawPixel(x, y, Color{ r=0, g=255, b=0, a=255 })
+        if D > 0 then
+            y = y + yi
+            D = D + (2 * (dy - dx))
+        else
+            D = D + 2*dy
+        end
+    end
+end
+
+local function plotLineHigh(x0, y0, x1, y1, img)
+    local dx = x1 - x0
+    local dy = y1 - y0
+    local xi = 1
+    if dx < 0 then
+        xi = -1
+        dx = -dx
+    end
+    local D = (2 * dx) - dy
+    local x = x0
+
+    for y = y0, y1 do
+        img:drawPixel(x, y, Color{ r=255, g=0, b=0, a=255 })
+        if D > 0 then
+            x = x + xi
+            D = D + (2 * (dx - dy))
+        else
+            D = D + 2*dx
+        end
+    end
+end
+
+local function plotLine(x0, y0, x1, y1, img)
+    if (x0 < 0) and (x1 < 0) then return end
+    if (y0 < 0) and (y1 < 0) then return end
+    if (x0 > img.width) and (x1 > img.width) then return end
+    if (y0 > img.height) and (y1 > img.height) then return end
+
+    if math.abs(y1 - y0) < math.abs(x1 - x0) then
+        if x0 > x1 then
+            plotLineLow(x1, y1, x0, y0, img)
+        else
+            plotLineLow(x0, y0, x1, y1, img)
+        end
+    else
+        if y0 > y1 then
+            plotLineHigh(x1, y1, x0, y0, img)
+        else
+            plotLineHigh(x0, y0, x1, y1, img)
+        end
+    end
+end
+
 local function renderParticles(userSettings)
     local layer = spr:newLayer()
     layer.name = "Particles"
@@ -209,12 +274,15 @@ local function renderParticles(userSettings)
                       max = userSettings.lifespan * (1.0 + userSettings.lifespanVariance / 100)}
     local startAngle = {min = userSettings.startVectorAngle - userSettings.startVectorAngleVariance / 2,
                         range = userSettings.startVectorAngleVariance}
-    local startMagnitude = {min = userSettings.startVectorMagnitude * (1.0 - userSettings.startVectorMagnitudeVariance / 100),
-                            range = userSettings.startVectorMagnitude * (userSettings.startVectorMagnitudeVariance / 50)}
+
+    local startVectorMagnitude = (maxSpriteDimension / 10) * (userSettings.startVectorMagnitude / 100)
+    local startMagnitude = {min = startVectorMagnitude * (1.0 - userSettings.startVectorMagnitudeVariance / 100),
+                            range = startVectorMagnitude * (userSettings.startVectorMagnitudeVariance / 50)}
 
     local gravityRadians = math.rad(userSettings.gravityAngle)
-    local gravityVector = {x = userSettings.gravityMagnitude * math.sin(gravityRadians),
-                           y = - (userSettings.gravityMagnitude * math.cos(gravityRadians))}
+    local gravityMagnitude = (maxSpriteDimension / 10) * (userSettings.gravityMagnitude / 100)
+    local gravityVector = {x = gravityMagnitude * math.sin(gravityRadians),
+                           y = - (gravityMagnitude * math.cos(gravityRadians))}
 
     local floatDrag = 1.0 - userSettings.drag / 100
 
@@ -227,15 +295,13 @@ local function renderParticles(userSettings)
             local radians = math.rad(angle)
             local cosR = math.cos(radians)
             local sinR = math.sin(radians)
-            local temp1 = {}
-            temp1['x'] = emissionPixels[startPosition].x
-            temp1['y'] = emissionPixels[startPosition].y
-            local temp2 = {}
-            temp2['x'] = emissionPixels[startPosition].x
-            temp2['y'] = emissionPixels[startPosition].y
+            local startPositionCopy = {}
+            startPositionCopy['x'] = emissionPixels[startPosition].x
+            startPositionCopy['y'] = emissionPixels[startPosition].y
+            local subFrame
             table.insert(particles, {age = 0,
-                                     currentPosition = temp1,
-                                     previousPosition = temp2,
+                                     subFrameTiming = math.random(),
+                                     currentPosition = startPositionCopy,
                                      lifespan = math.random(lifespan.min, lifespan.max),
                                      vector = {x = magnitude * sinR, y = - (magnitude * cosR) },
                                      dead = false } )
@@ -247,17 +313,24 @@ local function renderParticles(userSettings)
                 if p.age > p.lifespan then
                     p.dead = true
                 else
-                    local temp = {}
-                    temp['x'] = p.currentPosition.x
-                    temp['y'] = p.currentPosition.y
-                    p.previousPosition = temp
-                    p.currentPosition.x = p.currentPosition.x + p.vector.x
-                    p.currentPosition.y = p.currentPosition.y + p.vector.y
+                    local previousPosition = {}
+                    previousPosition['x'] = p.currentPosition.x
+                    previousPosition['y'] = p.currentPosition.y
                     p.vector.x = (p.vector.x + gravityVector.x) * floatDrag
                     p.vector.y = (p.vector.y + gravityVector.y) * floatDrag
+                    p.currentPosition.x = p.currentPosition.x + p.vector.x
+                    p.currentPosition.y = p.currentPosition.y + p.vector.y
 
-                    --img:drawPixel(p.previousPosition.x, p.previousPosition.y, Color{ r=255, g=0, b=0, a=128 })
-                    img:drawPixel(p.currentPosition.x, p.currentPosition.y, Color{ r=0, g=0, b=0, a=255 })
+                    local subFrameX = previousPosition.x + (p.currentPosition.x - previousPosition.x) * p.subFrameTiming
+                    local subFrameY = previousPosition.y + (p.currentPosition.y - previousPosition.y) * p.subFrameTiming
+
+                    local y0 = math.floor(subFrameY)
+                    local y1 = math.floor(subFrameY - p.vector.y)
+
+                    local x0 = math.floor(subFrameX)
+                    local x1 = math.floor(subFrameX - p.vector.x)
+
+                    plotLine(x0, y0, x1, y1, img)        
                 end
             end
         end
@@ -265,12 +338,6 @@ local function renderParticles(userSettings)
     end
 
     app.refresh()
-
-    -- for eash frame
-    --   birth particles
-    --   kill particles
-    --   move particles
-    --   render particles
 end
 
 local function showWarningDialog()
@@ -322,7 +389,7 @@ dlg:slider{ id="emitterY",
             label="Emitter Center Y",
             min=-spr.height,
             max=spr.height*2,
-            value=math.ceil(spr.height*0.5),
+            value=math.ceil(spr.height*0.1),
             onchange=function() overlay(dlg.data, 'emitter') end }
 
 dlg:slider{ id="emitterLength",
@@ -356,8 +423,8 @@ dlg:slider{ id="gravityAngle",
 dlg:slider{ id="gravityMagnitude",
             label="Gravity Magnitude",
             min=0,
-            max=maxSpriteDimension,
-            value=math.ceil(maxSpriteDimension/20),
+            max=100,
+            value=10,
             onchange=function() overlay(dlg.data, 'gravityMagnitude') end }
 
 dlg:slider{ id="startVectorAngle",
@@ -377,8 +444,8 @@ dlg:slider{ id="startVectorAngleVariance",
 dlg:slider{ id="startVectorMagnitude",
             label="Start Vector Magnitude",
             min=0,
-            max=maxSpriteDimension,
-            value=math.ceil(maxSpriteDimension/20),
+            max=100,
+            value=10,
             onchange=function() overlay(dlg.data, 'startVectorMagnitude') end }
 
 dlg:slider{ id="startVectorMagnitudeVariance",
