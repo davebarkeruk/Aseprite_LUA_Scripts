@@ -192,14 +192,20 @@ local function renderEmitterPixels(emissionPixels)
     app.refresh()
 end
 
-local function pixelOver(x, y, fgndR, fgndG, fgndB, fgndA, img)
+local function pixelOver(x, y, col, sAlpha, img)
     local bgndCol = img:getPixel(x, y)
 
     local bgndA = app.pixelColor.rgbaA(bgndCol)
     if bgndA == 0 then
-        img:drawPixel(x, y, Color{ r=fgndR, g=fgndG, b=fgndB, a=fgndA })
+        a = col.alpha * sAlpha
+        img:drawPixel(x, y, Color{ r=col.red, g=col.green, b=col.blue, a=col.alpha*sAlpha })
         return
     end
+
+    local fgndR = col.red
+    local fgndG = col.green
+    local fgndB = col.blue
+    local fgndA = col.alpha * sAlpha
 
     local bgndR = app.pixelColor.rgbaR(bgndCol)
     local bgndG = app.pixelColor.rgbaG(bgndCol)
@@ -220,7 +226,7 @@ local function pixelOver(x, y, fgndR, fgndG, fgndB, fgndA, img)
     img:drawPixel(x, y, Color{ r=outR, g=outG, b=outB, a=outA })
 end
 
-local function plotLineLow(x0, y0, x1, y1, img, reversed)
+local function plotLineLow(x0, y0, x1, y1, img, col, reversed)
     local dx = x1 - x0
     local dy = y1 - y0
     local yi = 1
@@ -231,17 +237,16 @@ local function plotLineLow(x0, y0, x1, y1, img, reversed)
     local D = (2 * dy) - dx
     local y = y0
 
-    local dAlpha = math.abs(254/dx)
-    local alpha = 0
+    local dAlpha = math.abs(1/dx)
+    local sAlpha = 0
     if not reversed then
-        alpha = 255
+        sAlpha = 1
         dAlpha = - dAlpha
     end
 
     for x = x0, x1 do
-        --img:drawPixel(x, y, Color{ r=0, g=0, b=0, a=alpha })
-        pixelOver(x, y, 0, 0, 0, alpha, img)
-        alpha = alpha + dAlpha
+        pixelOver(x, y, col, sAlpha, img)
+        sAlpha = sAlpha + dAlpha
         if D > 0 then
             y = y + yi
             D = D + (2 * (dy - dx))
@@ -251,7 +256,7 @@ local function plotLineLow(x0, y0, x1, y1, img, reversed)
     end
 end
 
-local function plotLineHigh(x0, y0, x1, y1, img, reversed)
+local function plotLineHigh(x0, y0, x1, y1, img, col, reversed)
     local dx = x1 - x0
     local dy = y1 - y0
     local xi = 1
@@ -262,17 +267,16 @@ local function plotLineHigh(x0, y0, x1, y1, img, reversed)
     local D = (2 * dx) - dy
     local x = x0
 
-    local dAlpha = math.abs(254/dy)
-    local alpha = 0
+    local dAlpha = math.abs(1/dy)
+    local sAlpha = 0
     if not reversed then
-        alpha = 255
+        sAlpha = 1
         dAlpha = - dAlpha
     end
 
     for y = y0, y1 do
-        --img:drawPixel(x, y, Color{ r=0, g=0, b=0, a=alpha })
-        pixelOver(x, y, 0, 0, 0, alpha, img)
-        alpha = alpha + dAlpha
+        pixelOver(x, y, col, sAlpha, img)
+        sAlpha = sAlpha + dAlpha
         if D > 0 then
             x = x + xi
             D = D + (2 * (dx - dy))
@@ -282,7 +286,7 @@ local function plotLineHigh(x0, y0, x1, y1, img, reversed)
     end
 end
 
-local function plotLine(x0, y0, x1, y1, img)
+local function plotLine(x0, y0, x1, y1, img, col)
     if (x0 < 0) and (x1 < 0) then return end
     if (y0 < 0) and (y1 < 0) then return end
     if (x0 > img.width) and (x1 > img.width) then return end
@@ -293,15 +297,15 @@ local function plotLine(x0, y0, x1, y1, img)
 
     if math.abs(y1 - y0) < math.abs(x1 - x0) then
         if x0 > x1 then
-            plotLineLow(x1, y1, x0, y0, img, true)
+            plotLineLow(x1, y1, x0, y0, img, col, true)
         else
-            plotLineLow(x0, y0, x1, y1, img, false)
+            plotLineLow(x0, y0, x1, y1, img, col, false)
         end
     else
         if y0 > y1 then
-            plotLineHigh(x1, y1, x0, y0, img, true)
+            plotLineHigh(x1, y1, x0, y0, img, col, true)
         else
-            plotLineHigh(x0, y0, x1, y1, img, false)
+            plotLineHigh(x0, y0, x1, y1, img, col, false)
         end
     end
 end
@@ -317,7 +321,6 @@ local function renderParticles(userSettings)
                                       userSettings.emitterAngle,
                                       userSettings.emitterRadius)
 
-    --renderEmitterPixels(emissionPixels)
     local particles = {}
     local lifespan = {min = userSettings.lifespan * (1.0 - userSettings.lifespanVariance / 100),
                       max = userSettings.lifespan * (1.0 + userSettings.lifespanVariance / 100)}
@@ -334,6 +337,27 @@ local function renderParticles(userSettings)
                            y = - (gravityMagnitude * math.cos(gravityRadians))}
 
     local floatDrag = 1.0 - userSettings.drag / 100
+
+    local startH = userSettings.startColor.hue
+    local diffH = userSettings.endColor.hue - userSettings.startColor.hue
+    if math.abs(diffH) > 180 then
+        if diffH > 0 then
+            diffH = diffH - 360
+        else
+            diffH = diffH + 360
+        end
+    end
+
+    print(userSettings.startColor.hue, userSettings.endColor.hue, diffH)
+
+    local startS = userSettings.startColor.saturation
+    local diffS = userSettings.endColor.saturation - userSettings.startColor.saturation
+
+    local startV = userSettings.startColor.value
+    local diffV = userSettings.endColor.value - userSettings.startColor.value
+
+    local startA = userSettings.startColor.alpha
+    local diffA = userSettings.endColor.alpha - userSettings.startColor.alpha
 
     for frmNumber,frame in ipairs(spr.frames) do
         local img = Image(spr.spec)
@@ -377,7 +401,19 @@ local function renderParticles(userSettings)
                 local x0 = math.floor(subFrameX)
                 local x1 = math.floor(subFrameX - p.vector.x)
 
-                plotLine(x0, y0, x1, y1, img)        
+                local ageFloat = math.min(p.age+p.subFrameTiming, p.lifespan) / p.lifespan
+
+                local h = startH + math.floor(diffH * ageFloat)
+                if h > 360 then
+                    h = h - 361
+                elseif h < 0 then
+                    h =  361 + h
+                end
+                local s = startS + diffS * ageFloat
+                local v = startV + diffV * ageFloat
+                local a = startA + diffA * ageFloat
+
+                plotLine(x0, y0, x1, y1, img, Color{hue=h, saturation=s, value=v, alpha=a})        
             end
         end
         spr:newCel(layer, frmNumber, img, Point(0, 0))
@@ -423,6 +459,9 @@ dlg:slider{ id="lifespanVariance",
     min=0,
     max=100,
     value=10}
+
+dlg:color{ id="startColor", label="Particle Start Color", color=Color{ r=255, g=255, b=0, a=255 }}
+dlg:color{ id="endColor", label="Particle End Color", color=Color{ r=255, g=0, b=0, a=255 }}
 
 dlg:slider{ id="emitterX",
             label="Emitter Center X",
