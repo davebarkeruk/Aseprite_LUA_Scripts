@@ -3,6 +3,7 @@ if not spr then return app.alert "There is no active sprite" end
 
 if not(spr.spec.colorMode == ColorMode.RGB) then return app.alert "Sprite needs to be in RGB color mode" end
 
+local renderCount = 0
 local warningDialogViewed = false
 local maxSpriteDimension = math.max(spr.spec.width, spr.spec.height)
 local oldSelection = Selection()
@@ -308,127 +309,132 @@ local function plotLine(x0, y0, x1, y1, img, col)
 end
 
 local function renderParticles(userSettings)
-    local layer = spr:newLayer()
-    layer.name = "Particles"
-    layer.opacity = 255
+    app.transaction(
+        function()
+            renderCount = renderCount + 1
+            local layer = spr:newLayer()
+            layer.name = "Particles "..renderCount
+            layer.opacity = 255
 
-    math.randomseed(userSettings.seed)
+            math.randomseed(userSettings.seed)
 
-    emissionPixels = calcEmitterPixel(userSettings.emitterX,
-                                      userSettings.emitterY,
-                                      userSettings.emitterLength,
-                                      userSettings.emitterAngle,
-                                      userSettings.emitterRadius)
+            emissionPixels = calcEmitterPixel(userSettings.emitterX,
+                                            userSettings.emitterY,
+                                            userSettings.emitterLength,
+                                            userSettings.emitterAngle,
+                                            userSettings.emitterRadius)
 
-    local particles = {}
-    local lifespan = {min = userSettings.lifespan * (1.0 - userSettings.lifespanVariance / 100),
-                      max = userSettings.lifespan * (1.0 + userSettings.lifespanVariance / 100)}
-    local startAngle = {min = math.rad(userSettings.startVectorAngle - userSettings.startVectorAngleVariance / 2),
-                        range = math.rad(userSettings.startVectorAngleVariance)}
+            local particles = {}
+            local lifespan = {min = userSettings.lifespan * (1.0 - userSettings.lifespanVariance / 100),
+                            max = userSettings.lifespan * (1.0 + userSettings.lifespanVariance / 100)}
+            local startAngle = {min = math.rad(userSettings.startVectorAngle - userSettings.startVectorAngleVariance / 2),
+                                range = math.rad(userSettings.startVectorAngleVariance)}
 
-    local startVectorMagnitude = (maxSpriteDimension / 10) * (userSettings.startVectorMagnitude / 100)
-    local startMagnitude = {min = startVectorMagnitude * (1.0 - userSettings.startVectorMagnitudeVariance / 100),
-                            range = startVectorMagnitude * (userSettings.startVectorMagnitudeVariance / 50)}
+            local startVectorMagnitude = (maxSpriteDimension / 10) * (userSettings.startVectorMagnitude / 100)
+            local startMagnitude = {min = startVectorMagnitude * (1.0 - userSettings.startVectorMagnitudeVariance / 100),
+                                    range = startVectorMagnitude * (userSettings.startVectorMagnitudeVariance / 50)}
 
-    local gravityRadians = math.rad(userSettings.gravityAngle)
-    local gravityMagnitude = (maxSpriteDimension / 10) * (userSettings.gravityMagnitude / 100)
-    local gravityVector = {x = gravityMagnitude * math.sin(gravityRadians),
-                           y = - (gravityMagnitude * math.cos(gravityRadians))}
+            local gravityRadians = math.rad(userSettings.gravityAngle)
+            local gravityMagnitude = (maxSpriteDimension / 10) * (userSettings.gravityMagnitude / 100)
+            local gravityVector = {x = gravityMagnitude * math.sin(gravityRadians),
+                                y = - (gravityMagnitude * math.cos(gravityRadians))}
 
-    local floatDrag = 1.0 - userSettings.drag / 100
+            local floatDrag = 1.0 - userSettings.drag / 100
 
-    local startH = userSettings.startColor.hue
-    local diffH = userSettings.endColor.hue - userSettings.startColor.hue
-    if math.abs(diffH) > 180 then
-        if diffH > 0 then
-            diffH = diffH - 360
-        else
-            diffH = diffH + 360
-        end
-    end
-
-    local startS = userSettings.startColor.saturation
-    local diffS = userSettings.endColor.saturation - userSettings.startColor.saturation
-
-    local startV = userSettings.startColor.value
-    local diffV = userSettings.endColor.value - userSettings.startColor.value
-
-    local startA = userSettings.startColor.alpha
-    local diffA = userSettings.endColor.alpha - userSettings.startColor.alpha
-
-    for frmNumber = userSettings.emitStart, userSettings.simDuration do
-        local img
-        if frmNumber > 0 then
-            img = Image(spr.spec)
-        end
-
-        if frmNumber <= userSettings.emitEnd then
-            for i = 1, userSettings.particlesPerFrame do
-                local startPosition = math.random(#emissionPixels)
-                local angle = startAngle.min + startAngle.range * math.random()
-                local magnitude = startMagnitude.min + startMagnitude.range * math.random()
-                local cosR = math.cos(angle)
-                local sinR = math.sin(angle)
-                local startPositionCopy = {}
-                startPositionCopy['x'] = emissionPixels[startPosition].x
-                startPositionCopy['y'] = emissionPixels[startPosition].y
-                local subFrame
-                table.insert(particles, {age = 0,
-                                        subFrameTiming = math.random(),
-                                        currentPosition = startPositionCopy,
-                                        lifespan = math.random(lifespan.min, lifespan.max),
-                                        vector = {x = magnitude * sinR, y = - (magnitude * cosR) }} )
-            end
-        end
-
-        for _,p in ipairs(particles) do
-            p.age = p.age + 1
-            if p.age > p.lifespan then
-                p = nil
-            else
-                local previousPosition = {}
-                previousPosition['x'] = p.currentPosition.x
-                previousPosition['y'] = p.currentPosition.y
-                p.vector.x = (p.vector.x + gravityVector.x) * floatDrag
-                p.vector.y = (p.vector.y + gravityVector.y) * floatDrag
-                p.currentPosition.x = p.currentPosition.x + p.vector.x
-                p.currentPosition.y = p.currentPosition.y + p.vector.y
-
-                local subFrameX = previousPosition.x + (p.currentPosition.x - previousPosition.x) * p.subFrameTiming
-                local subFrameY = previousPosition.y + (p.currentPosition.y - previousPosition.y) * p.subFrameTiming
-
-                local y0 = math.floor(subFrameY)
-                local y1 = math.floor(subFrameY - p.vector.y)
-
-                local x0 = math.floor(subFrameX)
-                local x1 = math.floor(subFrameX - p.vector.x)
-
-                local ageFloat = math.min(p.age+p.subFrameTiming, p.lifespan) / p.lifespan
-
-                local h = startH + math.floor(diffH * ageFloat)
-                if h > 360 then
-                    h = h - 361
-                elseif h < 0 then
-                    h =  361 + h
+            local startH = userSettings.startColor.hue
+            local diffH = userSettings.endColor.hue - userSettings.startColor.hue
+            if math.abs(diffH) > 180 then
+                if diffH > 0 then
+                    diffH = diffH - 360
+                else
+                    diffH = diffH + 360
                 end
-                local s = startS + diffS * ageFloat
-                local v = startV + diffV * ageFloat
-                local a = startA + diffA * ageFloat
+            end
 
+            local startS = userSettings.startColor.saturation
+            local diffS = userSettings.endColor.saturation - userSettings.startColor.saturation
+
+            local startV = userSettings.startColor.value
+            local diffV = userSettings.endColor.value - userSettings.startColor.value
+
+            local startA = userSettings.startColor.alpha
+            local diffA = userSettings.endColor.alpha - userSettings.startColor.alpha
+
+            for frmNumber = userSettings.emitStart, userSettings.simDuration do
+                local img
                 if frmNumber > 0 then
-                    plotLine(x0, y0, x1, y1, img, Color{hue=h, saturation=s, value=v, alpha=a})
+                    img = Image(spr.spec)
+                end
+
+                if frmNumber <= userSettings.emitEnd then
+                    for i = 1, userSettings.particlesPerFrame do
+                        local startPosition = math.random(#emissionPixels)
+                        local angle = startAngle.min + startAngle.range * math.random()
+                        local magnitude = startMagnitude.min + startMagnitude.range * math.random()
+                        local cosR = math.cos(angle)
+                        local sinR = math.sin(angle)
+                        local startPositionCopy = {}
+                        startPositionCopy['x'] = emissionPixels[startPosition].x
+                        startPositionCopy['y'] = emissionPixels[startPosition].y
+                        local subFrame
+                        table.insert(particles, {age = 0,
+                                                subFrameTiming = math.random(),
+                                                currentPosition = startPositionCopy,
+                                                lifespan = math.random(lifespan.min, lifespan.max),
+                                                vector = {x = magnitude * sinR, y = - (magnitude * cosR) }} )
+                    end
+                end
+
+                for _,p in ipairs(particles) do
+                    p.age = p.age + 1
+                    if p.age > p.lifespan then
+                        p = nil
+                    else
+                        local previousPosition = {}
+                        previousPosition['x'] = p.currentPosition.x
+                        previousPosition['y'] = p.currentPosition.y
+                        p.vector.x = (p.vector.x + gravityVector.x) * floatDrag
+                        p.vector.y = (p.vector.y + gravityVector.y) * floatDrag
+                        p.currentPosition.x = p.currentPosition.x + p.vector.x
+                        p.currentPosition.y = p.currentPosition.y + p.vector.y
+
+                        local subFrameX = previousPosition.x + (p.currentPosition.x - previousPosition.x) * p.subFrameTiming
+                        local subFrameY = previousPosition.y + (p.currentPosition.y - previousPosition.y) * p.subFrameTiming
+
+                        local y0 = math.floor(subFrameY)
+                        local y1 = math.floor(subFrameY - p.vector.y)
+
+                        local x0 = math.floor(subFrameX)
+                        local x1 = math.floor(subFrameX - p.vector.x)
+
+                        local ageFloat = math.min(p.age+p.subFrameTiming, p.lifespan) / p.lifespan
+
+                        local h = startH + math.floor(diffH * ageFloat)
+                        if h > 360 then
+                            h = h - 361
+                        elseif h < 0 then
+                            h =  361 + h
+                        end
+                        local s = startS + diffS * ageFloat
+                        local v = startV + diffV * ageFloat
+                        local a = startA + diffA * ageFloat
+
+                        if frmNumber > 0 then
+                            plotLine(x0, y0, x1, y1, img, Color{hue=h, saturation=s, value=v, alpha=a})
+                        end
+                    end
+                end
+                if frmNumber > 0 then
+                    if frmNumber > #spr.frames then
+                        spr:newEmptyFrame(frmNumber)
+                    end
+                    spr:newCel(layer, frmNumber, img, Point(0, 0))
                 end
             end
-        end
-        if frmNumber > 0 then
-            if frmNumber > #spr.frames then
-                spr:newEmptyFrame(frmNumber)
-            end
-            spr:newCel(layer, frmNumber, img, Point(0, 0))
-        end
-    end
 
-    app.refresh()
+            app.refresh()
+        end
+    )
 end
 
 local function showWarningDialog()
