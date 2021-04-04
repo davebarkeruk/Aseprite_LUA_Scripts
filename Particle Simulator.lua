@@ -192,7 +192,35 @@ local function renderEmitterPixels(emissionPixels)
     app.refresh()
 end
 
-local function plotLineLow(x0, y0, x1, y1, img)
+local function pixelOver(x, y, fgndR, fgndG, fgndB, fgndA, img)
+    local bgndCol = img:getPixel(x, y)
+
+    local bgndA = app.pixelColor.rgbaA(bgndCol)
+    if bgndA == 0 then
+        img:drawPixel(x, y, Color{ r=fgndR, g=fgndG, b=fgndB, a=fgndA })
+        return
+    end
+
+    local bgndR = app.pixelColor.rgbaR(bgndCol)
+    local bgndG = app.pixelColor.rgbaG(bgndCol)
+    local bgndB = app.pixelColor.rgbaB(bgndCol)
+
+    local floatFgndA = fgndA / 255
+    local floatBgndA = bgndA / 255
+
+    local a0 = (floatFgndA + (floatBgndA * (1 - floatFgndA)))
+    local fgndScale = floatFgndA / a0
+    local bgndScale = (floatBgndA * (1 - floatFgndA)) / a0
+
+    local outR = (fgndR * fgndScale) + (bgndR * bgndScale)
+    local outG = (fgndG * fgndScale) + (bgndG * bgndScale)
+    local outB = (fgndB * fgndScale) + (bgndB * bgndScale)
+    local outA = 255 * a0
+
+    img:drawPixel(x, y, Color{ r=outR, g=outG, b=outB, a=outA })
+end
+
+local function plotLineLow(x0, y0, x1, y1, img, reversed)
     local dx = x1 - x0
     local dy = y1 - y0
     local yi = 1
@@ -203,8 +231,17 @@ local function plotLineLow(x0, y0, x1, y1, img)
     local D = (2 * dy) - dx
     local y = y0
 
+    local dAlpha = math.abs(254/dx)
+    local alpha = 0
+    if not reversed then
+        alpha = 255
+        dAlpha = - dAlpha
+    end
+
     for x = x0, x1 do
-        img:drawPixel(x, y, Color{ r=0, g=255, b=0, a=255 })
+        --img:drawPixel(x, y, Color{ r=0, g=0, b=0, a=alpha })
+        pixelOver(x, y, 0, 0, 0, alpha, img)
+        alpha = alpha + dAlpha
         if D > 0 then
             y = y + yi
             D = D + (2 * (dy - dx))
@@ -214,7 +251,7 @@ local function plotLineLow(x0, y0, x1, y1, img)
     end
 end
 
-local function plotLineHigh(x0, y0, x1, y1, img)
+local function plotLineHigh(x0, y0, x1, y1, img, reversed)
     local dx = x1 - x0
     local dy = y1 - y0
     local xi = 1
@@ -225,8 +262,17 @@ local function plotLineHigh(x0, y0, x1, y1, img)
     local D = (2 * dx) - dy
     local x = x0
 
+    local dAlpha = math.abs(254/dy)
+    local alpha = 0
+    if not reversed then
+        alpha = 255
+        dAlpha = - dAlpha
+    end
+
     for y = y0, y1 do
-        img:drawPixel(x, y, Color{ r=255, g=0, b=0, a=255 })
+        --img:drawPixel(x, y, Color{ r=0, g=0, b=0, a=alpha })
+        pixelOver(x, y, 0, 0, 0, alpha, img)
+        alpha = alpha + dAlpha
         if D > 0 then
             x = x + xi
             D = D + (2 * (dx - dy))
@@ -242,17 +288,20 @@ local function plotLine(x0, y0, x1, y1, img)
     if (x0 > img.width) and (x1 > img.width) then return end
     if (y0 > img.height) and (y1 > img.height) then return end
 
+    -- if y0 == y1 horizontal line
+    -- if x0 == x1 vertical line
+
     if math.abs(y1 - y0) < math.abs(x1 - x0) then
         if x0 > x1 then
-            plotLineLow(x1, y1, x0, y0, img)
+            plotLineLow(x1, y1, x0, y0, img, true)
         else
-            plotLineLow(x0, y0, x1, y1, img)
+            plotLineLow(x0, y0, x1, y1, img, false)
         end
     else
         if y0 > y1 then
-            plotLineHigh(x1, y1, x0, y0, img)
+            plotLineHigh(x1, y1, x0, y0, img, true)
         else
-            plotLineHigh(x0, y0, x1, y1, img)
+            plotLineHigh(x0, y0, x1, y1, img, false)
         end
     end
 end
@@ -272,8 +321,8 @@ local function renderParticles(userSettings)
     local particles = {}
     local lifespan = {min = userSettings.lifespan * (1.0 - userSettings.lifespanVariance / 100),
                       max = userSettings.lifespan * (1.0 + userSettings.lifespanVariance / 100)}
-    local startAngle = {min = userSettings.startVectorAngle - userSettings.startVectorAngleVariance / 2,
-                        range = userSettings.startVectorAngleVariance}
+    local startAngle = {min = math.rad(userSettings.startVectorAngle - userSettings.startVectorAngleVariance / 2),
+                        range = math.rad(userSettings.startVectorAngleVariance)}
 
     local startVectorMagnitude = (maxSpriteDimension / 10) * (userSettings.startVectorMagnitude / 100)
     local startMagnitude = {min = startVectorMagnitude * (1.0 - userSettings.startVectorMagnitudeVariance / 100),
@@ -292,9 +341,9 @@ local function renderParticles(userSettings)
             local startPosition = math.random(#emissionPixels)
             local angle = startAngle.min + startAngle.range * math.random()
             local magnitude = startMagnitude.min + startMagnitude.range * math.random()
-            local radians = math.rad(angle)
-            local cosR = math.cos(radians)
-            local sinR = math.sin(radians)
+            --local radians = math.rad(angle)
+            local cosR = math.cos(angle)
+            local sinR = math.sin(angle)
             local startPositionCopy = {}
             startPositionCopy['x'] = emissionPixels[startPosition].x
             startPositionCopy['y'] = emissionPixels[startPosition].y
@@ -303,35 +352,32 @@ local function renderParticles(userSettings)
                                      subFrameTiming = math.random(),
                                      currentPosition = startPositionCopy,
                                      lifespan = math.random(lifespan.min, lifespan.max),
-                                     vector = {x = magnitude * sinR, y = - (magnitude * cosR) },
-                                     dead = false } )
+                                     vector = {x = magnitude * sinR, y = - (magnitude * cosR) }} )
         end
 
         for _,p in ipairs(particles) do
-            if not p.dead then
-                p.age = p.age + 1
-                if p.age > p.lifespan then
-                    p.dead = true
-                else
-                    local previousPosition = {}
-                    previousPosition['x'] = p.currentPosition.x
-                    previousPosition['y'] = p.currentPosition.y
-                    p.vector.x = (p.vector.x + gravityVector.x) * floatDrag
-                    p.vector.y = (p.vector.y + gravityVector.y) * floatDrag
-                    p.currentPosition.x = p.currentPosition.x + p.vector.x
-                    p.currentPosition.y = p.currentPosition.y + p.vector.y
+            p.age = p.age + 1
+            if p.age > p.lifespan then
+                p = nil
+            else
+                local previousPosition = {}
+                previousPosition['x'] = p.currentPosition.x
+                previousPosition['y'] = p.currentPosition.y
+                p.vector.x = (p.vector.x + gravityVector.x) * floatDrag
+                p.vector.y = (p.vector.y + gravityVector.y) * floatDrag
+                p.currentPosition.x = p.currentPosition.x + p.vector.x
+                p.currentPosition.y = p.currentPosition.y + p.vector.y
 
-                    local subFrameX = previousPosition.x + (p.currentPosition.x - previousPosition.x) * p.subFrameTiming
-                    local subFrameY = previousPosition.y + (p.currentPosition.y - previousPosition.y) * p.subFrameTiming
+                local subFrameX = previousPosition.x + (p.currentPosition.x - previousPosition.x) * p.subFrameTiming
+                local subFrameY = previousPosition.y + (p.currentPosition.y - previousPosition.y) * p.subFrameTiming
 
-                    local y0 = math.floor(subFrameY)
-                    local y1 = math.floor(subFrameY - p.vector.y)
+                local y0 = math.floor(subFrameY)
+                local y1 = math.floor(subFrameY - p.vector.y)
 
-                    local x0 = math.floor(subFrameX)
-                    local x1 = math.floor(subFrameX - p.vector.x)
+                local x0 = math.floor(subFrameX)
+                local x1 = math.floor(subFrameX - p.vector.x)
 
-                    plotLine(x0, y0, x1, y1, img)        
-                end
+                plotLine(x0, y0, x1, y1, img)        
             end
         end
         spr:newCel(layer, frmNumber, img, Point(0, 0))
