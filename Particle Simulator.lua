@@ -1,12 +1,12 @@
 local spr = app.activeSprite
 if not spr then return app.alert "There is no active sprite" end
 
-local oldSelection = Selection()
-oldSelection:add(spr.selection)
+if not(spr.spec.colorMode == ColorMode.RGB) then return app.alert "Sprite needs to be in RGB color mode" end
 
 local warningDialogViewed = false
-
 local maxSpriteDimension = math.max(spr.spec.width, spr.spec.height)
+local oldSelection = Selection()
+oldSelection:add(spr.selection)
 
 local function sqr(x)
     return x * x
@@ -292,9 +292,6 @@ local function plotLine(x0, y0, x1, y1, img, col)
     if (x0 > img.width) and (x1 > img.width) then return end
     if (y0 > img.height) and (y1 > img.height) then return end
 
-    -- if y0 == y1 horizontal line
-    -- if x0 == x1 vertical line
-
     if math.abs(y1 - y0) < math.abs(x1 - x0) then
         if x0 > x1 then
             plotLineLow(x1, y1, x0, y0, img, col, true)
@@ -314,6 +311,8 @@ local function renderParticles(userSettings)
     local layer = spr:newLayer()
     layer.name = "Particles"
     layer.opacity = 255
+
+    math.randomseed(userSettings.seed)
 
     emissionPixels = calcEmitterPixel(userSettings.emitterX,
                                       userSettings.emitterY,
@@ -348,8 +347,6 @@ local function renderParticles(userSettings)
         end
     end
 
-    print(userSettings.startColor.hue, userSettings.endColor.hue, diffH)
-
     local startS = userSettings.startColor.saturation
     local diffS = userSettings.endColor.saturation - userSettings.startColor.saturation
 
@@ -359,24 +356,29 @@ local function renderParticles(userSettings)
     local startA = userSettings.startColor.alpha
     local diffA = userSettings.endColor.alpha - userSettings.startColor.alpha
 
-    for frmNumber,frame in ipairs(spr.frames) do
-        local img = Image(spr.spec)
-        for i = 1, userSettings.particlesPerFrame do
-            local startPosition = math.random(#emissionPixels)
-            local angle = startAngle.min + startAngle.range * math.random()
-            local magnitude = startMagnitude.min + startMagnitude.range * math.random()
-            --local radians = math.rad(angle)
-            local cosR = math.cos(angle)
-            local sinR = math.sin(angle)
-            local startPositionCopy = {}
-            startPositionCopy['x'] = emissionPixels[startPosition].x
-            startPositionCopy['y'] = emissionPixels[startPosition].y
-            local subFrame
-            table.insert(particles, {age = 0,
-                                     subFrameTiming = math.random(),
-                                     currentPosition = startPositionCopy,
-                                     lifespan = math.random(lifespan.min, lifespan.max),
-                                     vector = {x = magnitude * sinR, y = - (magnitude * cosR) }} )
+    for frmNumber = userSettings.emitStart, userSettings.simDuration do
+        local img
+        if frmNumber > 0 then
+            img = Image(spr.spec)
+        end
+
+        if frmNumber <= userSettings.emitEnd then
+            for i = 1, userSettings.particlesPerFrame do
+                local startPosition = math.random(#emissionPixels)
+                local angle = startAngle.min + startAngle.range * math.random()
+                local magnitude = startMagnitude.min + startMagnitude.range * math.random()
+                local cosR = math.cos(angle)
+                local sinR = math.sin(angle)
+                local startPositionCopy = {}
+                startPositionCopy['x'] = emissionPixels[startPosition].x
+                startPositionCopy['y'] = emissionPixels[startPosition].y
+                local subFrame
+                table.insert(particles, {age = 0,
+                                        subFrameTiming = math.random(),
+                                        currentPosition = startPositionCopy,
+                                        lifespan = math.random(lifespan.min, lifespan.max),
+                                        vector = {x = magnitude * sinR, y = - (magnitude * cosR) }} )
+            end
         end
 
         for _,p in ipairs(particles) do
@@ -413,10 +415,17 @@ local function renderParticles(userSettings)
                 local v = startV + diffV * ageFloat
                 local a = startA + diffA * ageFloat
 
-                plotLine(x0, y0, x1, y1, img, Color{hue=h, saturation=s, value=v, alpha=a})        
+                if frmNumber > 0 then
+                    plotLine(x0, y0, x1, y1, img, Color{hue=h, saturation=s, value=v, alpha=a})
+                end
             end
         end
-        spr:newCel(layer, frmNumber, img, Point(0, 0))
+        if frmNumber > 0 then
+            if frmNumber > #spr.frames then
+                spr:newEmptyFrame(frmNumber)
+            end
+            spr:newCel(layer, frmNumber, img, Point(0, 0))
+        end
     end
 
     app.refresh()
@@ -440,123 +449,230 @@ local function onExit(dlg)
     dlg:close()
 end
 
+local function updateDialog(dlg, id)
+    if id == "seed" then
+        if dlg.data.seed < 1 then
+            dlg:modify{ id="seed", text="1" }
+        elseif dlg.data.seed > 999999 then
+            dlg:modify{ id="seed", text="999999" }
+        end
+    elseif id == "simDuration" then
+        if dlg.data.simDuration < 25 then
+            dlg:modify{ id="lifespan", max=50}
+            dlg:modify{ id="emitStart", min=-25, max=25}
+            dlg:modify{ id="emitEnd", max=25}
+        else
+            dlg:modify{ id="lifespan", max=2*dlg.data.simDuration}
+            dlg:modify{ id="emitStart", min=-dlg.data.simDuration, max=dlg.data.simDuration}
+            dlg:modify{ id="emitEnd", max=dlg.data.simDuration}
+        end
+    elseif id == "emitStart" then
+        if dlg.data.emitStart < 1 then
+            dlg:modify{ id="emitEnd", min=1}
+        else
+            dlg:modify{ id="emitEnd", min=dlg.data.emitStart}
+        end
+    end
+end
+
 local dlg = Dialog("Particle Simulator")
 
-dlg:slider{ id="particlesPerFrame",
-            label="Particles Per Frame",
-            min=1,
-            max=500,
-            value=20}
+dlg:slider{
+    id="simDuration",
+    label="Simulation Duration",
+    min=1,
+    max=200,
+    value=25,
+    onchange=function() updateDialog(dlg, "simDuration") end
+}
 
-dlg:slider{ id="lifespan",
+dlg:slider{
+    id="emitStart",
+    label="Emission Starts Frame",
+    min=-25,
+    max=25,
+    value=1,
+    onchange=function() updateDialog(dlg, "emitStart") end
+}
+
+dlg:slider{
+    id="emitEnd",
+    label="Emission Ends Frame",
+    min=1,
+    max=25,
+    value=25
+}
+
+dlg:slider{
+    id="particlesPerFrame",
+    label="Particles Per Frame",
+    min=1,
+    max=500,
+    value=20
+}
+
+dlg:slider{
+    id="lifespan",
     label="Particle Lifespan",
     min=1,
-    max=#spr.frames*2,
-    value=math.min(50,#spr.frames)}
+    max=50,
+    value=25
+}
 
-dlg:slider{ id="lifespanVariance",
+dlg:slider{
+    id="lifespanVariance",
     label="Particle Lifespan Variance",
     min=0,
     max=100,
-    value=10}
+    value=10
+}
 
-dlg:color{ id="startColor", label="Particle Start Color", color=Color{ r=255, g=255, b=0, a=255 }}
-dlg:color{ id="endColor", label="Particle End Color", color=Color{ r=255, g=0, b=0, a=255 }}
+dlg:color{
+    id="startColor",
+    label="Particle Start Color",
+    color=Color{ r=255, g=255, b=0, a=255 }
+}
+dlg:color{
+    id="endColor",
+    label="Particle End Color",
+    color=Color{ r=255, g=0, b=0, a=255 }
+}
 
-dlg:slider{ id="emitterX",
-            label="Emitter Center X",
-            min=-spr.width,
-            max=spr.width*2,
-            value=math.ceil(spr.width*0.5),
-            onchange=function() overlay(dlg.data, 'emitter') end }
+dlg:slider{
+    id="emitterX",
+    label="Emitter Center X",
+    min=-spr.width,
+    max=spr.width*2,
+    value=math.ceil(spr.width*0.5),
+    onchange=function() overlay(dlg.data, 'emitter') end
+}
 
-dlg:slider{ id="emitterY",
-            label="Emitter Center Y",
-            min=-spr.height,
-            max=spr.height*2,
-            value=math.ceil(spr.height*0.1),
-            onchange=function() overlay(dlg.data, 'emitter') end }
+dlg:slider{
+    id="emitterY",
+    label="Emitter Center Y",
+    min=-spr.height,
+    max=spr.height*2,
+    value=math.ceil(spr.height*0.1),
+    onchange=function() overlay(dlg.data, 'emitter') end
+}
 
-dlg:slider{ id="emitterLength",
-            label="Emitter Length",
-            min=1,
-            max=maxSpriteDimension*2,
-            value=maxSpriteDimension,
-            onchange=function() overlay(dlg.data, 'emitter') end }
+dlg:slider{
+    id="emitterLength",
+    label="Emitter Length",
+    min=1,
+    max=maxSpriteDimension*2,
+    value=maxSpriteDimension,
+    onchange=function() overlay(dlg.data, 'emitter') end
+}
 
-dlg:slider{ id="emitterAngle",
-            label="Emitter Angle",
-            min=-90,
-            max=90,
-            value=0,
-            onchange=function() overlay(dlg.data, 'emitter') end }
+dlg:slider{
+    id="emitterAngle",
+    label="Emitter Angle",
+    min=-90,
+    max=90,
+    value=0,
+    onchange=function() overlay(dlg.data, 'emitter') end
+}
 
-dlg:slider{ id="emitterRadius",
-            label="Emitter Radius",
-            min=1,
-            max=math.ceil(maxSpriteDimension*0.5),
-            value=5,
-            onchange=function() overlay(dlg.data, 'emitter') end }
+dlg:slider{
+    id="emitterRadius",
+    label="Emitter Radius",
+    min=1,
+    max=math.ceil(maxSpriteDimension*0.5),
+    value=5,
+    onchange=function() overlay(dlg.data, 'emitter') end
+}
 
-dlg:slider{ id="gravityAngle",
-            label="Gravity Angle",
-            min=0,
-            max=360,
-            value=180,
-            onchange=function() overlay(dlg.data, 'gravityAngle') end }
+dlg:slider{
+    id="gravityAngle",
+    label="Gravity Angle",
+    min=0,
+    max=360,
+    value=180,
+    onchange=function() overlay(dlg.data, 'gravityAngle') end
+}
 
-dlg:slider{ id="gravityMagnitude",
-            label="Gravity Magnitude",
-            min=0,
-            max=100,
-            value=10,
-            onchange=function() overlay(dlg.data, 'gravityMagnitude') end }
+dlg:slider{
+    id="gravityMagnitude",
+    label="Gravity Magnitude",
+    min=0,
+    max=100,
+    value=10,
+    onchange=function() overlay(dlg.data, 'gravityMagnitude') end
+}
 
-dlg:slider{ id="startVectorAngle",
-            label="Start Vector Angle",
-            min=0,
-            max=360,
-            value=180,
-            onchange=function() overlay(dlg.data, 'startVectorAngle') end }
+dlg:slider{
+    id="startVectorAngle",
+    label="Start Vector Angle",
+    min=0,
+    max=360,
+    value=180,
+    onchange=function() overlay(dlg.data, 'startVectorAngle') end
+}
 
-dlg:slider{ id="startVectorAngleVariance",
-            label="Start Vector Angle Variance",
-            min=0,
-            max=360,
-            value=5,
-            onchange=function() overlay(dlg.data, 'startVectorAngle') end }
+dlg:slider{
+    id="startVectorAngleVariance",
+    label="Start Vector Angle Variance",
+    min=0,
+    max=360,
+    value=5,
+    onchange=function() overlay(dlg.data, 'startVectorAngle') end
+}
 
-dlg:slider{ id="startVectorMagnitude",
-            label="Start Vector Magnitude",
-            min=0,
-            max=100,
-            value=10,
-            onchange=function() overlay(dlg.data, 'startVectorMagnitude') end }
+dlg:slider{
+    id="startVectorMagnitude",
+    label="Start Vector Magnitude",
+    min=0,
+    max=100,
+    value=10,
+    onchange=function() overlay(dlg.data, 'startVectorMagnitude') end
+}
 
-dlg:slider{ id="startVectorMagnitudeVariance",
-            label="Start Vector Magnitude Variance",
-            min=0,
-            max=100,
-            value=10,
-            onchange=function() overlay(dlg.data, 'startVectorMagnitude') end }
+dlg:slider{
+    id="startVectorMagnitudeVariance",
+    label="Start Vector Magnitude Variance",
+    min=0,
+    max=100,
+    value=10,
+    onchange=function() overlay(dlg.data, 'startVectorMagnitude') end
+}
 
-dlg:slider{ id="drag",
-            label="Drag",
-            min=0,
-            max=100,
-            value=10}
+dlg:slider{
+    id="drag",
+    label="Drag",
+    min=0,
+    max=100,
+    value=10
+}
 
-dlg:check{ id="useOverlays",
-           label="Use Overlays",
-           selected=false,
-           onclick=function() showWarningDialog() end}
+dlg:number{
+    id="seed",
+    label="Seed",
+    text="1234",
+    decimals=0,
+    onchange=function() updateDialog(dlg, "seed") end
+}
 
-dlg:button{ id="start",
-           text="Start",
-           onclick=function() renderParticles(dlg.data) end }
+dlg:check{
+    id="useOverlays",
+    label="Use Overlays",
+    selected=false,
+    onclick=function() showWarningDialog() end
+}
 
-dlg:button{ id="exit",
-            text="Exit",
-            onclick=function() onExit(dlg) end }
+dlg:button{
+    id="start",
+    text="Start",
+    onclick=function() renderParticles(dlg.data) end
+}
+
+dlg:button{
+    id="exit",
+    text="Exit",
+    onclick=function() onExit(dlg) end
+}
+
+local bounds = dlg.bounds
+dlg.bounds = Rectangle(85, 55, bounds.width*1.25, bounds.height)
 
 dlg:show{wait=false}
