@@ -64,7 +64,7 @@ do
                 local b = app.pixelColor.rgbaB(col)
                 local a = app.pixelColor.rgbaA(col) * scale
 
-                img:drawPixel(x, y, Color{ r=r, g=g, b=b, a=a })
+                img:drawPixel(x, y, app.pixelColor.rgba(r, g, b, a))
             end
         end
     end
@@ -84,7 +84,7 @@ do
 
                 local a = app.pixelColor.rgbaA(col) * tintScale
 
-                img:drawPixel(x, y, Color{ r=r, g=g, b=b, a=a })
+                img:drawPixel(x, y, app.pixelColor.rgba(r, g, b, a))
             end
         end
     end

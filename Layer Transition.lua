@@ -64,7 +64,7 @@ do
                     local b = app.pixelColor.rgbaB(col)
                     local a = app.pixelColor.rgbaA(col)
 
-                    imgA:drawPixel(x, y, Color{ r=r, g=g, b=b, a=a })
+                    imgA:drawPixel(x, y, app.pixelColor.rgba(r, g, b, a))
                 end
             end
         end
@@ -84,7 +84,7 @@ do
                     local b = app.pixelColor.rgbaB(col)
                     local a = app.pixelColor.rgbaA(col)
 
-                    imgA:drawPixel(x, y, Color{ r=r, g=g, b=b, a=a })
+                    imgA:drawPixel(x, y, app.pixelColor.rgba(r, g, b, a))
                 end
             end
         end

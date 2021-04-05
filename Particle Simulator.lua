@@ -199,7 +199,7 @@ local function pixelOver(x, y, col, sAlpha, img)
     local bgndA = app.pixelColor.rgbaA(bgndCol)
     if bgndA == 0 then
         a = col.alpha * sAlpha
-        img:drawPixel(x, y, Color{ r=col.red, g=col.green, b=col.blue, a=col.alpha*sAlpha })
+        img:drawPixel(x, y, app.pixelColor.rgba(col.red, col.green, col.blue, col.alpha*sAlpha))
         return
     end
 
@@ -224,7 +224,7 @@ local function pixelOver(x, y, col, sAlpha, img)
     local outB = (fgndB * fgndScale) + (bgndB * bgndScale)
     local outA = 255 * a0
 
-    img:drawPixel(x, y, Color{ r=outR, g=outG, b=outB, a=outA })
+    img:drawPixel(x, y, app.pixelColor.rgba( outR, outG, outB, outA ))
 end
 
 local function plotLineLow(x0, y0, x1, y1, img, col, reversed)
