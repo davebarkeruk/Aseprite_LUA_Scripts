@@ -2,7 +2,7 @@ do
     local spr = app.activeSprite
     if not spr then return app.alert "There is no active sprite" end
 
-    if not(spr.spec.colorMode == ColorMode.RGB) then return app.alert "Sprite needs to be in RGB color mode" end
+    if spr.spec.colorMode ~= ColorMode.RGB then return app.alert "Sprite needs to be in RGB color mode" end
 
     local renderCount = 0
 

@@ -13,7 +13,7 @@ local function load_palette_csv(filename)
         return nil
     end
 
-    if not (line == "red,green,blue,alpha") then
+    if line ~= "red,green,blue,alpha" then
         app.alert("File does not have valid first line.")
         f:close()
         return nil
