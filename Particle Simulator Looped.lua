@@ -3,11 +3,37 @@ if not spr then return app.alert "There is no active sprite" end
 
 if spr.spec.colorMode ~= ColorMode.RGB then return app.alert "Sprite needs to be in RGB color mode" end
 
+app.activeTool = 'pencil'
+
 local renderCount = 0
 local warningDialogViewed = false
 local maxSpriteDimension = math.max(spr.spec.width, spr.spec.height)
 local oldSelection = Selection()
 oldSelection:add(spr.selection)
+
+local blob3 = {
+    {-1,-1,0.3627}, { 0,-1,0.7137}, { 1,-1,0.3627},
+    {-1, 0,0.7137}, { 0, 0,1.0000}, { 1, 0,0.7137},
+    {-1, 1,0.3627}, { 0, 1,0.7137}, { 1, 1,0.3627}
+}
+
+local blob5 = {
+    { 0,-2,0.2157}, 
+    {-1,-1,0.8392}, { 0,-1,1.0000}, { 1,-1,0.8392}, 
+    {-2, 0,0.2157}, {-1, 0,1.0000}, { 0, 0,1.0000}, { 1, 0,1.0000}, { 2, 0,0.2157},
+    {-1, 1,0.8392}, { 0, 1,1.0000}, { 1, 1,0.8392}, 
+    { 0, 2,0.2157}, 
+}
+
+local blob7 = {
+    {-1,-3,0.0510}, { 0,-3,0.2040}, { 1,-3,0.0510},
+    {-2,-2,0.3137}, {-1,-2,0.9451}, { 0,-2,1.0000}, { 1,-2,0.9451}, { 2,-2,0.3137},
+    {-3,-1,0.0510}, {-2,-1,0.9451}, {-1,-1,1.0000}, { 0,-1,1.0000}, { 1,-1,1.0000}, { 2,-1,0.9451}, { 3,-1,0.0510},
+    {-3, 0,0.2040}, {-2, 0,1.0000}, {-1, 0,1.0000}, { 0, 0,1.0000}, { 1, 0,1.0000}, { 2, 0,1.0000}, { 3, 0,0.2040},
+    {-3, 1,0.0510}, {-2, 1,0.9451}, {-1, 1,1.0000}, { 0, 1,1.0000}, { 1, 1,1.0000}, { 2, 1,0.9451}, { 3, 1,0.0510},
+    {-2, 2,0.3137}, {-1, 2,0.9451}, { 0, 2,1.0000}, { 1, 2,0.9451}, { 2, 2,0.3137},
+    {-1, 3,0.0510}, { 0, 3,0.2040}, { 1, 3,0.0510}
+}
 
 local function sqr(x)
     return x * x
@@ -198,15 +224,15 @@ local function pixelOver(x, y, col, sAlpha, img)
 
     local bgndA = app.pixelColor.rgbaA(bgndCol)
     if bgndA == 0 then
-        a = col.alpha * sAlpha
-        img:drawPixel(x, y, app.pixelColor.rgba(col.red, col.green, col.blue, col.alpha*sAlpha))
+        local outA = math.min(math.max(col.alpha * sAlpha, 0), 255)
+        img:drawPixel(x, y, app.pixelColor.rgba(col.red, col.green, col.blue, outA))
         return
     end
 
     local fgndR = col.red
     local fgndG = col.green
     local fgndB = col.blue
-    local fgndA = col.alpha * sAlpha
+    local fgndA = math.min(math.max(col.alpha * sAlpha, 0), 255)
 
     local bgndR = app.pixelColor.rgbaR(bgndCol)
     local bgndG = app.pixelColor.rgbaG(bgndCol)
@@ -225,6 +251,39 @@ local function pixelOver(x, y, col, sAlpha, img)
     local outA = 255 * a0
 
     img:drawPixel(x, y, app.pixelColor.rgba( outR, outG, outB, outA ))
+end
+
+local function drawBlob3(x, y, col, img)
+    if (x < -1) then return end
+    if (y < -1) then return end
+    if (x > img.width+1) then return end
+    if (y > img.height+1) then return end
+
+    for _,p in ipairs(blob3) do
+        pixelOver(x+p[1], y+p[2], col, p[3], img)
+    end
+end
+
+local function drawBlob5(x, y, col, img)
+    if (x < -2) then return end
+    if (y < -2) then return end
+    if (x > img.width+2) then return end
+    if (y > img.height+2) then return end
+
+    for _,p in ipairs(blob5) do
+        pixelOver(x+p[1], y+p[2], col, p[3], img)
+    end
+end
+
+local function drawBlob7(x, y, col, img)
+    if (x < -3) then return end
+    if (y < -3) then return end
+    if (x > img.width+3) then return end
+    if (y > img.height+3) then return end
+
+    for _,p in ipairs(blob7) do
+        pixelOver(x+p[1], y+p[2], col, p[3], img)
+    end
 end
 
 local function plotLineLow(x0, y0, x1, y1, img, col, reversed)
@@ -287,7 +346,7 @@ local function plotLineHigh(x0, y0, x1, y1, img, col, reversed)
     end
 end
 
-local function plotLine(x0, y0, x1, y1, img, col)
+local function drawLine(x0, y0, x1, y1, col, img)
     if (x0 < 0) and (x1 < 0) then return end
     if (y0 < 0) and (y1 < 0) then return end
     if (x0 > img.width) and (x1 > img.width) then return end
@@ -306,6 +365,15 @@ local function plotLine(x0, y0, x1, y1, img, col)
             plotLineHigh(x0, y0, x1, y1, img, col, false)
         end
     end
+end
+
+local function drawPoint(x, y, col, img)
+    if (x < 0) then return end
+    if (y < 0) then return end
+    if (x > img.width) then return end
+    if (y > img.height) then return end
+
+    pixelOver(x, y, col, 1, img)
 end
 
 local function renderParticles(userSettings)
@@ -360,6 +428,7 @@ local function renderParticles(userSettings)
             local diffA = userSettings.endColor.alpha - userSettings.startColor.alpha
 
             for frmNumber = 1, userSettings.simDuration do
+                collectgarbage()
                 local img = Image(spr.spec)
 
                 for i = 1, userSettings.particlesPerFrame do
@@ -413,8 +482,16 @@ local function renderParticles(userSettings)
                         local v = startV + diffV * ageFloat
                         local a = startA + diffA * ageFloat
 
-                        if frmNumber > 0 then
-                            plotLine(x0, y0, x1, y1, img, Color{hue=h, saturation=s, value=v, alpha=a})
+                        if userSettings.particleShape == "Point" then
+                            drawPoint(x0, y0, Color{hue=h, saturation=s, value=v, alpha=a}, img)
+                        elseif  userSettings.particleShape == "Streak" then
+                            drawLine(x0, y0, x1, y1, Color{hue=h, saturation=s, value=v, alpha=a}, img)
+                        elseif  userSettings.particleShape ==  "Blob 3" then
+                            drawBlob3(x0, y0, Color{hue=h, saturation=s, value=v, alpha=a}, img)
+                        elseif  userSettings.particleShape ==  "Blob 5" then
+                            drawBlob5(x0, y0, Color{hue=h, saturation=s, value=v, alpha=a}, img)
+                        elseif  userSettings.particleShape ==  "Blob 7" then
+                            drawBlob7(x0, y0, Color{hue=h, saturation=s, value=v, alpha=a}, img)
                         end
                     end
                 end
@@ -426,6 +503,7 @@ local function renderParticles(userSettings)
             end
 
             for frmNumber = 1, userSettings.simDuration do
+                collectgarbage()
                 local img = Image(spr.spec)
                 local layerCel = layer:cel(spr.frames[frmNumber])
 
@@ -466,8 +544,16 @@ local function renderParticles(userSettings)
                             local v = startV + diffV * ageFloat
                             local a = startA + diffA * ageFloat
 
-                            if frmNumber > 0 then
-                                plotLine(x0, y0, x1, y1, img, Color{hue=h, saturation=s, value=v, alpha=a})
+                            if userSettings.particleShape == "Point" then
+                                drawPoint(x0, y0, Color{hue=h, saturation=s, value=v, alpha=a}, img)
+                            elseif  userSettings.particleShape == "Streak" then
+                                drawLine(x0, y0, x1, y1, Color{hue=h, saturation=s, value=v, alpha=a}, img)
+                            elseif  userSettings.particleShape ==  "Blob 3" then
+                                drawBlob3(x0, y0, Color{hue=h, saturation=s, value=v, alpha=a}, img)
+                            elseif  userSettings.particleShape ==  "Blob 5" then
+                                drawBlob5(x0, y0, Color{hue=h, saturation=s, value=v, alpha=a}, img)
+                            elseif  userSettings.particleShape ==  "Blob 7" then
+                                drawBlob7(x0, y0, Color{hue=h, saturation=s, value=v, alpha=a}, img)
                             end
                         end
                     end
@@ -514,7 +600,7 @@ dlg:slider{
     id="simDuration",
     label="Simulation Duration",
     min=1,
-    max=200,
+    max=50,
     value=25,
     onchange=function() updateDialog(dlg, "simDuration") end
 }
@@ -523,26 +609,44 @@ dlg:slider{
     id="particlesPerFrame",
     label="Particles Per Frame",
     min=1,
-    max=500,
+    max=400,
     value=20
 }
 
 dlg:color{
     id="startColor",
-    label="Particle Start Color",
+    label="Particle Color",
     color=Color{ r=255, g=255, b=0, a=255 }
 }
+
 dlg:color{
     id="endColor",
-    label="Particle End Color",
     color=Color{ r=255, g=0, b=0, a=255 }
+}
+
+dlg:combobox{
+    id="particleShape",
+    label="Particle Shape",
+    option="Streak",
+    options={ "Point", "Streak", "Blob 3", "Blob 5", "Blob 7" },
+    onchange=function()
+        if dlg.data.particleShape == "Blob 3" then
+            dlg:modify{id="particlesPerFrame", max=300}
+        elseif dlg.data.particleShape == "Blob 5" then
+            dlg:modify{id="particlesPerFrame", max=200}
+        elseif dlg.data.particleShape == "Blob 7" then
+            dlg:modify{id="particlesPerFrame", max=100}
+        else
+            dlg:modify{id="particlesPerFrame", max=400}
+        end
+    end
 }
 
 dlg:slider{
     id="emitterX",
     label="Emitter Center X",
-    min=-spr.width,
-    max=spr.width*2,
+    min=-spr.width*0.5,
+    max=spr.width*1.5,
     value=math.ceil(spr.width*0.5),
     onchange=function() overlay(dlg.data, 'emitter') end
 }
@@ -550,8 +654,8 @@ dlg:slider{
 dlg:slider{
     id="emitterY",
     label="Emitter Center Y",
-    min=-spr.height,
-    max=spr.height*2,
+    min=-spr.height*0.5,
+    max=spr.height*1.5,
     value=math.ceil(spr.height*0.1),
     onchange=function() overlay(dlg.data, 'emitter') end
 }
